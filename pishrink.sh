@@ -63,11 +63,12 @@ fi
 help() {
 	local help
 	read -r -d '' help << EOM
-Usage: $0 [-sdrzh] imagefile.img [newimagefile.img]
+Usage: $0 [-sdrzeh] imagefile.img [newimagefile.img]
 
   -s: Don't expand filesystem when image is booted the first time
   -d: Write debug messages in a debug log file
   -r: Use advanced filesystem repair option if the normal one fails
+  -e: Set size for expansion, kilo/mega/gigabytes with suffix (k, M, G); will fail if larger than available
   -z: Gzip compress image after shrinking
 EOM
 	echo "$help"
@@ -75,12 +76,13 @@ EOM
 }
 
 usage() {
-	echo "Usage: $0 [-sdrzh] imagefile.img [newimagefile.img]"
+	echo "Usage: $0 [-sdrzeh] imagefile.img [newimagefile.img]"
 	echo ""
 	echo "  -s: Skip autoexpand"
 	echo "  -d: Debug mode on"
 	echo "  -r: Use advanced repair options"
 	echo "  -z: Gzip compress image after shrinking"
+	echo "  -e: Set size for expansion, kilo/mega/gigabytes with suffix (k, M, G); will fail if larger than available"
 	echo "  -h: display help text"
 	exit -1
 }
@@ -89,13 +91,15 @@ should_skip_autoexpand=false
 debug=false
 repair=false
 gzip_compress=false
+autoexpand_size=""
 
-while getopts ":sdrzh" opt; do
+while getopts ":sdrzhe:" opt; do
   case "${opt}" in
     s) should_skip_autoexpand=true ;;
     d) debug=true;;
     r) repair=true;;
     z) gzip_compress=true;;
+    e) autoexpand_size=$OPTARG;;
     h) help;;
     *) usage;;
   esac
@@ -126,6 +130,10 @@ fi
 if (( EUID != 0 )); then
   error $LINENO "You need to be running as root."
   exit -3
+fi
+#If autoexpand_size is set, needs to be something that will be accepted by fdisk
+if [ -n "$autoexpand_size" ] && ! echo $autoexpand_size | grep '^[0-9]*[kKmMgG]$'; then
+  usage
 fi
 
 #Check that what we need is installed
@@ -163,6 +171,11 @@ loopback=$(losetup -f --show -o "$partstart" "$img")
 tune2fs_output=$(tune2fs -l "$loopback")
 currentsize=$(echo "$tune2fs_output" | grep '^Block count:' | tr -d ' ' | cut -d ':' -f 2)
 blocksize=$(echo "$tune2fs_output" | grep '^Block size:' | tr -d ' ' | cut -d ':' -f 2)
+if [ -n $autoexpand_size ]; then
+  sizespec="+$autoexpand_size"
+else
+  sizespec="" #Technically redundant but included for clarity
+fi
 
 logVariables $LINENO tune2fs_output currentsize blocksize
 
@@ -200,7 +213,7 @@ n
 p
 $PART_NUM
 $PART_START
-
+__SIZE_SPEC_MARKER__
 p
 w
 EOF
@@ -225,15 +238,18 @@ raspi_config_expand() {
     exit
   fi
 }
-raspi_config_expand
-echo "WARNING: Using backup expand..."
-sleep 5
+if [ -z "__SIZE_SPEC_MARKER__" ]; then
+  raspi_config_expand
+  echo "WARNING: Using backup expand..."
+  sleep 5
+fi
 do_expand_rootfs
 echo "ERROR: Expanding failed..."
 sleep 5
 rm -f /etc/rc.local; cp -f /etc/rc.local.bak /etc/rc.local; /etc/rc.local
 exit 0
 EOF1
+    sed -i -e "s/__SIZE_SPEC_MARKER__/$sizespec/" "$mountdir/etc/rc.local"
     #####End no touch zone#####
     chmod +x "$mountdir/etc/rc.local"
   fi
