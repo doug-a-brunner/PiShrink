@@ -63,7 +63,7 @@ fi
 help() {
 	local help
 	read -r -d '' help << EOM
-Usage: $0 [-sdrpzh] imagefile.img [newimagefile.img]
+Usage: $0 [-sdrzh] imagefile.img [newimagefile.img]
 
   -s: Don't expand filesystem when image is booted the first time
   -d: Write debug messages in a debug log file
@@ -75,7 +75,7 @@ EOM
 }
 
 usage() {
-	echo "Usage: $0 [-sdrpzh] imagefile.img [newimagefile.img]"
+	echo "Usage: $0 [-sdrzh] imagefile.img [newimagefile.img]"
 	echo ""
 	echo "  -s: Skip autoexpand"
 	echo "  -d: Debug mode on"
@@ -97,7 +97,7 @@ while getopts ":sdrzh" opt; do
     r) repair=true;;
     z) gzip_compress=true;;
     h) help;;
-    *) usage ;;
+    *) usage;;
   esac
 done
 shift $((OPTIND-1))
@@ -154,7 +154,7 @@ fi
 trap cleanup ERR EXIT
 
 #Gather info
-info "Gatherin data"
+info "Gathering data"
 beforesize=$(ls -lh "$img" | cut -d ' ' -f 5)
 parted_output=$(parted -ms "$img" unit B print | tail -n 1)
 partnum=$(echo "$parted_output" | cut -d ':' -f 1)
@@ -205,25 +205,25 @@ p
 w
 EOF
 
-cat <<EOF > /etc/rc.local &&
+  cat <<EOF > /etc/rc.local &&
 #!/bin/sh
 echo "Expanding /dev/$ROOT_PART"
 resize2fs /dev/$ROOT_PART
 rm -f /etc/rc.local; cp -f /etc/rc.local.bak /etc/rc.local; /etc/rc.local
 
 EOF
-reboot
-exit
-}
-raspi_config_expand() {
-/usr/bin/env raspi-config --expand-rootfs
-if [[ $? != 0 ]]; then
-  return -1
-else
-  rm -f /etc/rc.local; cp -f /etc/rc.local.bak /etc/rc.local; /etc/rc.local
   reboot
   exit
-fi
+}
+raspi_config_expand() {
+  /usr/bin/env raspi-config --expand-rootfs
+  if [[ $? != 0 ]]; then
+    return -1
+  else
+    rm -f /etc/rc.local; cp -f /etc/rc.local.bak /etc/rc.local; /etc/rc.local
+    reboot
+    exit
+  fi
 }
 raspi_config_expand
 echo "WARNING: Using backup expand..."
