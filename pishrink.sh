@@ -131,7 +131,7 @@ if (( EUID != 0 )); then
   error $LINENO "You need to be running as root."
   exit -3
 fi
-if [ -n "$autoexpand_size" ]
+if [ -n "$autoexpand_size" ]; then
   #If autoexpand_size is set, needs to be something that will be accepted by fdisk
   if ! echo $autoexpand_size | grep '^[0-9]*[kKmMgG]$' >/dev/null; then
     usage
